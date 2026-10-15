@@ -1,0 +1,159 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: bus_mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./init-db:/docker-entrypoint-initdb.d
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--protocol=tcp", "-uroot", "-proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: bus_redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  trip-service:
+    build: ./services/trip-service
+    container_name: trip_service
+    environment:
+      DB_HOST: mysql
+      DB_NAME: trips_db
+      DB_USER: root
+      DB_PASS: root
+      PORT: 4001
+    ports:
+      - "4001:4001"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  payment-service:
+    build: ./services/payment-service
+    container_name: payment_service
+    environment:
+      DB_HOST: mysql
+      DB_NAME: payments_db
+      DB_USER: root
+      DB_PASS: root
+      PORT: 4003
+    ports:
+      - "4003:4003"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  ticket-service:
+    build: ./services/ticket-service
+    container_name: ticket_service
+    environment:
+      DB_HOST: mysql
+      DB_NAME: tickets_db
+      DB_USER: root
+      DB_PASS: root
+      PORT: 4004
+    ports:
+      - "4004:4004"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  user-service:
+    build: ./services/user-service
+    container_name: user_service
+    environment:
+      DB_HOST: mysql
+      DB_NAME: users_db
+      DB_USER: root
+      DB_PASS: root
+      PORT: 4005
+      JWT_SECRET: bus-ticket-shared-secret-change-me
+    ports:
+      - "4005:4005"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  notification-service:
+    build: ./services/notification-service
+    container_name: notification_service
+    environment:
+      PORT: 4006
+    ports:
+      - "4006:4006"
+
+  booking-service:
+    build: ./services/booking-service
+    container_name: booking_service
+    environment:
+      DB_HOST: mysql
+      DB_NAME: bookings_db
+      DB_USER: root
+      DB_PASS: root
+      REDIS_HOST: redis
+      PORT: 4002
+      TRIP_SERVICE_URL: http://trip-service:4001
+      PAYMENT_SERVICE_URL: http://payment-service:4003
+      TICKET_SERVICE_URL: http://ticket-service:4004
+      USER_SERVICE_URL: http://user-service:4005
+      NOTIFICATION_SERVICE_URL: http://notification-service:4006
+    ports:
+      - "4002:4002"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      trip-service:
+        condition: service_started
+      user-service:
+        condition: service_started
+      notification-service:
+        condition: service_started
+
+  gateway:
+    build: ./gateway
+    container_name: api_gateway
+    environment:
+      PORT: 8080
+      TRIP_SERVICE_URL: http://trip-service:4001
+      BOOKING_SERVICE_URL: http://booking-service:4002
+      PAYMENT_SERVICE_URL: http://payment-service:4003
+      TICKET_SERVICE_URL: http://ticket-service:4004
+      USER_SERVICE_URL: http://user-service:4005
+      JWT_SECRET: bus-ticket-shared-secret-change-me
+    ports:
+      - "8081:8080"
+    depends_on:
+      - trip-service
+      - booking-service
+      - payment-service
+      - ticket-service
+      - user-service
+
+  frontend:
+    build: ./frontend
+    container_name: bus_frontend
+    environment:
+      VITE_API_URL: http://localhost:8081/api
+    ports:
+      - "5173:5173"
+    depends_on:
+      - gateway
+
+volumes:
+  mysql_data:

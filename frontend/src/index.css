@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #FBF7EF;
+  color: #14213D;
+}
+
+/* Viền răng cưa kiểu vé xé - điểm nhấn thị giác xuyên suốt sản phẩm */
+.ticket-perf {
+  background-image: radial-gradient(circle at 0 50%, transparent 6px, #FBF7EF 6.5px);
+  background-size: 16px 16px;
+  background-repeat: repeat-y;
+}
+
+.ticket-perf-dark {
+  background-image: radial-gradient(circle at 0 50%, transparent 6px, #14213D 6.5px);
+  background-size: 16px 16px;
+  background-repeat: repeat-y;
+}
+
+/* Con dấu xác nhận xoay nhẹ */
+.stamp {
+  transform: rotate(-8deg);
+}
+
+/* Mã vé cách điệu dạng lưới ô vuông thay cho QR thật */
+.qr-fake {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  width: 88px;
+  height: 88px;
+}
+.qr-fake span {
+  background: #14213D;
+  border-radius: 1px;
+}
