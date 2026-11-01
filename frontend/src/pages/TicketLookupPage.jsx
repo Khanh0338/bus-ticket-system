@@ -62,7 +62,7 @@ export default function TicketLookupPage() {
           trip={trip}
           seatNumbers={ticket.seat_numbers.split(",")}
           qrCode={ticket.qr_code}
-          status="CONFIRMED"
+          status={ticket.status === "USED" ? "USED" : "CONFIRMED"}
         />
       )}
 

@@ -23,12 +23,15 @@ export const authApi = {
 };
 
 export const tripApi = {
+  get: (id) => api.get(`/trips/${id}`).then((r) => r.data.data),
+  create: (payload) => api.post("/trips", payload).then((r) => r.data.data),
   search: (params) => api.get("/trips", { params }).then((r) => r.data.data),
   getSeats: (tripId) => api.get(`/trips/${tripId}/seats`).then((r) => r.data.data)
 };
 
 export const ticketApi = {
   lookup: (code) => api.get("/tickets/lookup", { params: { code } }).then((r) => r.data.data),
+  checkIn: (code) => api.post(`/tickets/${encodeURIComponent(code)}/check-in`).then((r) => r.data.data),
   byBooking: (bookingId) => api.get(`/tickets/by-booking/${bookingId}`).then((r) => r.data.data)
 };
 
@@ -38,6 +41,11 @@ export const bookingApi = {
   get: (bookingId) => api.get(`/bookings/${bookingId}`).then((r) => r.data.data),
   mine: () => api.get("/bookings/mine").then((r) => r.data.data),
   seatStatus: (tripId) => api.get(`/bookings/trips/${tripId}/seat-status`).then((r) => r.data.data)
+};
+
+export const adminApi = {
+  listUsers: () => api.get("/admin/users").then((r) => r.data.data),
+  setRole: (id, role) => api.patch(`/admin/users/${id}/role`, { role }).then((r) => r.data.data)
 };
 
 export { unwrapError };

@@ -26,15 +26,15 @@ export function QrFake({ seed }) {
 }
 
 export default function TicketStub({ trip, seatNumbers, qrCode, status = "PENDING", passengerName }) {
-  const isConfirmed = status === "CONFIRMED";
+  const stampLabel = status === "USED" ? "ĐÃ SỬ DỤNG" : status === "CONFIRMED" ? "ĐÃ XÁC NHẬN" : null;
   return (
     <div className="flex rounded-2xl overflow-hidden shadow-lg shadow-ink/10 border border-ink/10 bg-paper relative">
       <div className="flex-1 p-5">
         <div className="flex items-center justify-between mb-3">
           <span className="font-mono text-xs uppercase tracking-wider text-ink-60">Vé xe khách</span>
-          {isConfirmed && (
+          {stampLabel && (
             <span className="stamp font-display text-xs font-bold text-teal border-2 border-teal rounded px-2 py-0.5">
-              ĐÃ XÁC NHẬN
+              {stampLabel}
             </span>
           )}
         </div>

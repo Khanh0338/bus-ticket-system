@@ -14,5 +14,5 @@ DB_NAME=x DB_USER=x DB_PASS=x DB_HOST=x REDIS_HOST=localhost PORT=4002 \
 TRIP_SERVICE_URL=http://localhost:5001 PAYMENT_SERVICE_URL=http://localhost:5003 \
 TICKET_SERVICE_URL=http://localhost:5004 USER_SERVICE_URL=http://localhost:5005 \
 NOTIFICATION_SERVICE_URL=http://localhost:5006 node booking_under_test.js &
-node test.js                         # kỳ vọng: 17 pass, 0 fail
+node test.js                         # kỳ vọng: 21 pass, 0 fail
 ```

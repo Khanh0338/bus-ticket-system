@@ -6,73 +6,82 @@ const cors = require("cors");
 const app = express();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-// Bật CORS: frontend (localhost:5173) và gateway (localhost:8081) là 2 origin khác nhau
-// khi chạy trên trình duyệt, nên bắt buộc phải cho phép cross-origin request ở đây,
-// nếu không trình duyệt sẽ chặn request trước khi nó gửi đi (lỗi CORS policy).
-app.use(cors({
-  origin: true, // phản chiếu lại origin gọi tới - phù hợp cho môi trường dev/demo đồ án
-  credentials: true
-}));
+// Frontend (localhost:5173) và Gateway là 2 origin khác nhau nên phải bật CORS (môi trường dev/demo).
+app.use(cors({ origin: true, credentials: true }));
 
-// Middleware xác thực JWT: kiểm tra token tại Gateway, không cần mỗi service tự verify lại
-// (đúng nguyên tắc kiểm soát truy cập tập trung tại tầng cổng vào - API Gateway pattern)
+// KHÔNG BAO GIỜ tin header danh tính do client gửi: xóa trước, chỉ Gateway mới được gắn sau khi verify JWT.
+app.use((req, res, next) => {
+  delete req.headers["x-user-id"];
+  delete req.headers["x-user-role"];
+  next();
+});
+
+function deny(res, status, code, message) {
+  return res.status(status).json({ error: { code, message } });
+}
+
+// Xác thực: verify JWT rồi gắn x-user-id, x-user-role cho service phía sau (đã nằm trong mạng nội bộ).
 function requireAuth(req, res, next) {
   const authHeader = req.headers.authorization || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (!token) {
-    return res.status(401).json({ error: { code: "NO_TOKEN", message: "Thiếu token xác thực, vui lòng đăng nhập" } });
-  }
+  if (!token) return deny(res, 401, "NO_TOKEN", "Thiếu token xác thực, vui lòng đăng nhập");
   try {
     const payload = jwt.verify(token, JWT_SECRET);
-    req.userId = payload.sub;
-    // gắn userId đã xác thực vào header để service phía sau tin tưởng, không cần verify lại
     req.headers["x-user-id"] = String(payload.sub);
+    req.headers["x-user-role"] = payload.role || "CUSTOMER";
     next();
   } catch (err) {
-    res.status(401).json({ error: { code: "INVALID_TOKEN", message: "Token không hợp lệ hoặc đã hết hạn" } });
+    deny(res, 401, "INVALID_TOKEN", "Token không hợp lệ hoặc đã hết hạn");
   }
 }
 
-// Auth routes - không cần token (đăng ký/đăng nhập)
-app.use("/api/auth", createProxyMiddleware({
-  target: process.env.USER_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/auth": "/auth" }
-}));
+// Phân quyền: phải đăng nhập VÀ có một trong các vai trò được liệt kê.
+function requireRole(...roles) {
+  return (req, res, next) =>
+    requireAuth(req, res, () =>
+      roles.includes(req.headers["x-user-role"])
+        ? next()
+        : deny(res, 403, "FORBIDDEN", "Bạn không có quyền thực hiện thao tác này")
+    );
+}
 
-// Trips - công khai, không cần đăng nhập để duyệt/tra cứu
-app.use("/api/trips", createProxyMiddleware({
-  target: process.env.TRIP_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/trips": "/trips" }
-}));
+const proxy = (target, from, to) =>
+  createProxyMiddleware({ target, changeOrigin: true, pathRewrite: { ["^" + from]: to } });
 
-// Trạng thái ghế của một chuyến - công khai (chỉ lộ số ghế, không lộ người đặt).
-// PHẢI đặt trước route /api/bookings bên dưới, vì Express khớp theo thứ tự khai báo.
-app.use("/api/bookings/trips", createProxyMiddleware({
-  target: process.env.BOOKING_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/bookings/trips": "/bookings/trips" }
-}));
+// --- Đăng ký / đăng nhập: công khai ---
+app.use("/api/auth", proxy(process.env.USER_SERVICE_URL, "/api/auth", "/auth"));
 
-// Bookings - bắt buộc đăng nhập (giữ ghế, xác nhận thanh toán)
-app.use("/api/bookings", requireAuth, createProxyMiddleware({
-  target: process.env.BOOKING_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/bookings": "/bookings" }
-}));
+// --- Quản trị người dùng: chỉ ADMIN ---
+app.use("/api/admin/users", requireRole("ADMIN"), proxy(process.env.USER_SERVICE_URL, "/api/admin/users", "/users"));
 
-app.use("/api/payments", createProxyMiddleware({
-  target: process.env.PAYMENT_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/payments": "/payments" }
-}));
+// --- Chuyến xe: ai cũng xem được; tạo/sửa chỉ OPERATOR, ADMIN ---
+app.use(
+  "/api/trips",
+  (req, res, next) => (req.method === "GET" ? next() : requireRole("OPERATOR", "ADMIN")(req, res, next)),
+  proxy(process.env.TRIP_SERVICE_URL, "/api/trips", "/trips")
+);
 
-app.use("/api/tickets", createProxyMiddleware({
-  target: process.env.TICKET_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: { "^/api/tickets": "/tickets" }
-}));
+// --- Trạng thái ghế: công khai (chỉ lộ số ghế, không lộ người đặt). Phải khai báo trước /api/bookings. ---
+app.use("/api/bookings/trips", proxy(process.env.BOOKING_SERVICE_URL, "/api/bookings/trips", "/bookings/trips"));
+
+// --- Đặt vé: phải đăng nhập (service tự kiểm tra chủ đơn qua x-user-id) ---
+app.use("/api/bookings", requireAuth, proxy(process.env.BOOKING_SERVICE_URL, "/api/bookings", "/bookings"));
+
+// --- Vé: chỉ mở đúng các route cần thiết, còn lại chặn (POST /tickets/issue là nội bộ) ---
+app.use(
+  "/api/tickets",
+  (req, res, next) => {
+    if (req.method === "GET" && req.path === "/lookup") return next(); // tra cứu công khai theo mã vé
+    if (req.method === "GET" && /^\/by-booking\/[^/]+$/.test(req.path)) return requireAuth(req, res, next);
+    if (req.method === "POST" && /^\/[^/]+\/check-in$/.test(req.path)) {
+      return requireRole("STAFF", "OPERATOR", "ADMIN")(req, res, next); // soát vé
+    }
+    return deny(res, 403, "FORBIDDEN_ROUTE", "Route này không được phép truy cập từ bên ngoài");
+  },
+  proxy(process.env.TICKET_SERVICE_URL, "/api/tickets", "/tickets")
+);
+
+// Payment và Notification là dịch vụ NỘI BỘ: chỉ Booking Service gọi, không mở ra qua Gateway.
 
 app.get("/health", (req, res) => res.json({ status: "ok" }));
 

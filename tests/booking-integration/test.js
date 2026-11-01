@@ -1,5 +1,7 @@
 const base = "http://localhost:4002";
+const CONTACT = { contactName: "Nguyễn Văn A", contactPhone: "0912345678", contactEmail: "a@example.com" };
 const call = async (method, path, userId, body) => {
+  if (path === "/bookings/hold" && body && body.contactName === undefined) body = { ...CONTACT, ...body };
   const r = await fetch(base + path, { method, headers: { "Content-Type":"application/json", ...(userId ? {"x-user-id": String(userId)} : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.json() };
 };
@@ -59,6 +61,14 @@ const check = (name, cond, extra="") => { cond ? pass++ : fail++; console.log((c
   r = await call("GET","/bookings/mine");
   check("lịch sử không đăng nhập -> 401", r.status===401);
 
+  r = await call("POST","/bookings/hold",6,{tripId:1,seatNumbers:["A20"],contactPhone:"123"});
+  check("SĐT sai định dạng -> 400 INVALID_CONTACT", r.status===400 && r.body.error.code==="INVALID_CONTACT", JSON.stringify(r));
+  r = await call("POST","/bookings/hold",6,{tripId:1,seatNumbers:["A20"],contactName:" "});
+  check("thiếu họ tên -> 400 INVALID_CONTACT", r.status===400 && r.body.error.code==="INVALID_CONTACT", JSON.stringify(r));
+  r = await call("POST","/bookings/hold",6,{tripId:1,seatNumbers:["A20"],contactEmail:"khong-phai-email"});
+  check("email sai -> 400 INVALID_CONTACT", r.status===400 && r.body.error.code==="INVALID_CONTACT", JSON.stringify(r));
+  r = await call("POST","/bookings/hold",6,{tripId:1,seatNumbers:["A20"]});
+  check("thông tin liên hệ hợp lệ được lưu cùng đơn", r.status===201 && r.body.data.contact_name==="Nguyễn Văn A" && r.body.data.contact_phone==="0912345678", JSON.stringify(r));
   console.log(`\n${pass} pass, ${fail} fail`);
   process.exit(fail?1:0);
 })();

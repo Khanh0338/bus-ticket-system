@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { authApi, unwrapError } from "../api.js";
 import { useAuth } from "../context/AuthContext.jsx";
 
@@ -10,6 +10,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   function update(field, value) {
     setForm((f) => ({ ...f, [field]: value }));
@@ -24,7 +25,8 @@ export default function LoginPage() {
         ? await authApi.login({ email: form.email, password: form.password })
         : await authApi.register(form);
       login(result);
-      navigate("/");
+      const from = location.state?.from;
+      navigate(from ? from.pathname + (from.search || "") : "/", { replace: true });
     } catch (err) {
       setError(unwrapError(err).message);
     } finally {

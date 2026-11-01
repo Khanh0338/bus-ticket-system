@@ -4,7 +4,11 @@ import Header from "./components/Header.jsx";
 import HomePage from "./pages/HomePage.jsx";
 import Footer from "./components/Footer.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
-import SeatSelectionPage from "./pages/SeatSelectionPage.jsx";
+import BookingPage from "./pages/BookingPage.jsx";
+import RequireRole from "./components/RequireRole.jsx";
+import AdminUsersPage from "./pages/AdminUsersPage.jsx";
+import OperatorTripsPage from "./pages/OperatorTripsPage.jsx";
+import StaffCheckInPage from "./pages/StaffCheckInPage.jsx";
 import CheckoutPage from "./pages/CheckoutPage.jsx";
 import TicketPage from "./pages/TicketPage.jsx";
 import TicketLookupPage from "./pages/TicketLookupPage.jsx";
@@ -17,11 +21,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/login" element={<LoginPage />} />
-        <Route path="/trips/:tripId/seats" element={<SeatSelectionPage />} />
+        <Route path="/trips/:tripId/seats" element={<BookingPage />} />
         <Route path="/checkout/:bookingId" element={<CheckoutPage />} />
         <Route path="/tickets/:bookingId" element={<TicketPage />} />
         <Route path="/tra-cuu-ve" element={<TicketLookupPage />} />
         <Route path="/my-bookings" element={<MyBookingsPage />} />
+        <Route path="/staff/check-in" element={<RequireRole roles={["STAFF", "OPERATOR", "ADMIN"]}><StaffCheckInPage /></RequireRole>} />
+        <Route path="/operator/trips" element={<RequireRole roles={["OPERATOR", "ADMIN"]}><OperatorTripsPage /></RequireRole>} />
+        <Route path="/admin/users" element={<RequireRole roles={["ADMIN"]}><AdminUsersPage /></RequireRole>} />
       </Routes>
       <Footer />
     </div>

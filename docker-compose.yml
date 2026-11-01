@@ -20,8 +20,6 @@ services:
   redis:
     image: redis:7-alpine
     container_name: bus_redis
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -36,8 +34,6 @@ services:
       DB_USER: root
       DB_PASS: root
       PORT: 4001
-    ports:
-      - "4001:4001"
     depends_on:
       mysql:
         condition: service_healthy
@@ -51,8 +47,6 @@ services:
       DB_USER: root
       DB_PASS: root
       PORT: 4003
-    ports:
-      - "4003:4003"
     depends_on:
       mysql:
         condition: service_healthy
@@ -66,8 +60,6 @@ services:
       DB_USER: root
       DB_PASS: root
       PORT: 4004
-    ports:
-      - "4004:4004"
     depends_on:
       mysql:
         condition: service_healthy
@@ -82,8 +74,9 @@ services:
       DB_PASS: root
       PORT: 4005
       JWT_SECRET: bus-ticket-shared-secret-change-me
-    ports:
-      - "4005:4005"
+      ADMIN_EMAIL: admin@benve.local
+      ADMIN_PASSWORD: Admin@12345
+      ADMIN_NAME: Quản trị viên
     depends_on:
       mysql:
         condition: service_healthy
@@ -93,8 +86,6 @@ services:
     container_name: notification_service
     environment:
       PORT: 4006
-    ports:
-      - "4006:4006"
 
   booking-service:
     build: ./services/booking-service
@@ -111,8 +102,6 @@ services:
       TICKET_SERVICE_URL: http://ticket-service:4004
       USER_SERVICE_URL: http://user-service:4005
       NOTIFICATION_SERVICE_URL: http://notification-service:4006
-    ports:
-      - "4002:4002"
     depends_on:
       mysql:
         condition: service_healthy

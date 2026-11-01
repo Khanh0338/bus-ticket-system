@@ -20,6 +20,9 @@ const Booking = sequelize.define("Booking", {
   trip_id: DataTypes.INTEGER,
   seat_numbers: DataTypes.STRING, // CSV
   user_id: DataTypes.STRING,
+  contact_name: DataTypes.STRING,
+  contact_phone: DataTypes.STRING,
+  contact_email: DataTypes.STRING,
   total_amount: DataTypes.DECIMAL(10, 2),
   status: DataTypes.STRING, // PENDING_PAYMENT | CONFIRMED | CANCELLED | EXPIRED
   expires_at: DataTypes.DATE
@@ -92,7 +95,7 @@ app.get("/bookings/mine", async (req, res) => {
  * Nếu bất kỳ ghế nào đã bị giữ -> rollback các ghế đã giữ thành công trong cùng request, trả 409.
  */
 app.post("/bookings/hold", async (req, res) => {
-  const { tripId, seatNumbers } = req.body;
+  const { tripId, seatNumbers, contactName, contactPhone, contactEmail } = req.body;
   // userId lấy từ header x-user-id do Gateway gắn sau khi đã verify JWT,
   // KHÔNG tin userId trong body (client có thể giả mạo người khác).
   const userId = req.headers["x-user-id"];
@@ -100,6 +103,12 @@ app.post("/bookings/hold", async (req, res) => {
   if (!tripId || !Array.isArray(seatNumbers) || seatNumbers.length === 0) {
     return errorResponse(res, 400, "INVALID_INPUT", "Thiếu tripId hoặc seatNumbers");
   }
+  // Thông tin khách đi xe (có thể khác người đặt: đặt hộ người thân)
+  if (!contactName || !String(contactName).trim()) return errorResponse(res, 400, "INVALID_CONTACT", "Vui lòng nhập họ và tên");
+  if (!/^(0|\+84)\d{9}$/.test(String(contactPhone || "").replace(/\s/g, ""))) {
+    return errorResponse(res, 400, "INVALID_CONTACT", "Số điện thoại không hợp lệ (VD: 0912345678)");
+  }
+  if (!/^\S+@\S+\.\S+$/.test(String(contactEmail || ""))) return errorResponse(res, 400, "INVALID_CONTACT", "Email không hợp lệ");
 
   // Ghế đã bán (booking CONFIRMED) không còn khóa Redis nên phải kiểm tra thêm trong DB,
   // nếu không ghế vừa bán xong vẫn bị giữ lại được -> bán trùng ghế.
@@ -139,6 +148,9 @@ app.post("/bookings/hold", async (req, res) => {
       trip_id: tripId,
       seat_numbers: seatNumbers.join(","),
       user_id: userId,
+      contact_name: String(contactName).trim(),
+      contact_phone: String(contactPhone).replace(/\s/g, ""),
+      contact_email: String(contactEmail).trim(),
       total_amount: totalAmount,
       status: "PENDING_PAYMENT",
       expires_at: expiresAt
@@ -211,13 +223,11 @@ app.post("/bookings/:id/confirm", async (req, res) => {
     // giao dịch thành công - nếu gửi thông báo lỗi, chỉ ghi log, không rollback
     // booking/vé đã xuất (khác với bước Payment vốn là bước "critical" của SAGA).
     try {
-      const userRes = await axios.get(`${USER_URL}/users/${booking.user_id}`);
-      const user = userRes.data.data;
       await axios.post(`${NOTIFICATION_URL}/notifications/send`, {
         channel: "EMAIL",
-        to: user.email,
+        to: booking.contact_email,
         subject: "Xác nhận đặt vé xe khách thành công",
-        message: `Chào ${user.fullName}, bạn đã đặt vé thành công cho chuyến #${booking.trip_id}, ghế ${seats.join(", ")}. Mã vé: ${ticketRes.data.data.qr_code}`
+        message: `Chào ${booking.contact_name}, bạn đã đặt vé thành công cho chuyến #${booking.trip_id}, ghế ${seats.join(", ")}. Mã vé: ${ticketRes.data.data.qr_code}`
       });
     } catch (notifyErr) {
       console.error("Gửi thông báo thất bại (không ảnh hưởng giao dịch):", notifyErr.message);

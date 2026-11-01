@@ -7,8 +7,8 @@ MVP triển khai 4 dịch vụ cốt lõi + API Gateway, đúng theo báo cáo p
 | Trip Service | /api/trips | Quản lý tuyến, chuyến, sơ đồ ghế (công khai) |
 | User Service | /api/auth | Đăng ký, đăng nhập, cấp JWT (công khai) |
 | Booking Service | /api/bookings | Giữ ghế (Redis), điều phối SAGA (**yêu cầu đăng nhập**) |
-| Payment Service | /api/payments | Mô phỏng thanh toán |
-| Ticket Service | /api/tickets | Xuất vé điện tử |
+| Payment Service | (nội bộ, không qua Gateway) | Mô phỏng thanh toán, chỉ Booking Service gọi |
+| Ticket Service | /api/tickets (chỉ vài route) | Xuất vé (nội bộ), tra cứu vé, soát vé |
 | Notification Service | (nội bộ, không qua Gateway) | Gửi email/SMS xác nhận — stateless |
 | API Gateway | :8081 | Điểm vào duy nhất, xác thực JWT tập trung |
 | **Frontend (React + Vite + Tailwind)** | **:5173** | **Giao diện tìm chuyến, chọn ghế, thanh toán, xem vé** |
@@ -34,12 +34,29 @@ curl -X POST http://localhost:8081/api/auth/login \
   -d '{"email":"khanh@example.com","password":"123456"}'
 ```
 
+## Vai trò và phân quyền
+
+| Vai trò | Làm được |
+|---|---|
+| Khách vãng lai (chưa đăng nhập) | Xem chuyến, xem sơ đồ ghế, tra cứu vé theo mã, đăng ký / đăng nhập |
+| `CUSTOMER` Khách hàng | Như trên, cộng giữ ghế, thanh toán, xem vé của mình |
+| `STAFF` Nhân viên soát vé | Như khách hàng, cộng soát vé lên xe (`/staff/check-in`) |
+| `OPERATOR` Nhà xe | Như nhân viên, cộng tạo chuyến xe (`/operator/trips`) |
+| `ADMIN` Quản trị viên | Toàn quyền, cộng xem người dùng và đổi vai trò (`/admin/users`) |
+
+- Đăng ký luôn tạo `CUSTOMER`. Chỉ `ADMIN` mới nâng quyền người khác; không thể tự hạ quyền của chính mình.
+- Tài khoản quản trị đầu tiên được tạo từ biến môi trường `ADMIN_EMAIL` / `ADMIN_PASSWORD` trong `docker-compose.yml` (mặc định `admin@benve.local` / `Admin@12345`). **Đổi mật khẩu này trước khi triển khai thật.**
+- Vai trò nằm trong JWT (hạn 1 ngày): sau khi bị đổi quyền, người dùng cần đăng nhập lại.
+- Gateway kiểm tra vai trò và gắn `x-user-id`, `x-user-role`; header do client tự gửi luôn bị xóa. Payment, Notification và `POST /tickets/issue` là nội bộ nên không mở qua Gateway. Các service không còn publish cổng ra máy host, chỉ Gateway (8081) và frontend (5173).
+- Test: `tests/rbac/README.md`.
+
 ## Chạy dự án
 
 ⚠️ **Bản này đổi cấu trúc bảng `trips` (thêm cột `bus_type`) và dữ liệu mẫu, nên BẮT BUỘC reset volume MySQL**, nếu không Trip Service sẽ lỗi `Unknown column 'bus_type'`:
 ```bash
 docker compose down -v
 ```
+Bản này còn thêm cột vai trò (`users.role`), thông tin liên hệ (`bookings.contact_*`) và trạng thái vé (`tickets.status`), nên reset volume là bắt buộc.
 Dữ liệu mẫu giờ sinh theo *hôm nay* (giờ Việt Nam), nên chuyến xe luôn nằm ở tương lai mỗi khi khởi tạo DB mới.
 
 ⚠️ **Nếu bạn đã chạy phiên bản trước và gặp lỗi hiển thị tiếng Việt (VD: "Đà Lạt" hiện thành "ÄÂ Lá°¡t")**: dữ liệu cũ trong volume MySQL đã bị lưu sai encoding, đổi cấu hình không tự sửa được dữ liệu đã lưu. Cần xóa volume cũ để MySQL khởi tạo lại từ đầu với charset đúng:

@@ -54,15 +54,16 @@ app.get("/trips/:id", async (req, res) => {
   res.json({ data: trip });
 });
 
-// GET /trips/:id/seats -> sinh sơ đồ ghế đơn giản A1..A(n)
+// GET /trips/:id/seats -> sơ đồ ghế. Xe giường nằm có 2 tầng (A = tầng dưới, B = tầng trên), loại khác 1 tầng.
 app.get("/trips/:id/seats", async (req, res) => {
   const trip = await Trip.findByPk(req.params.id);
   if (!trip) return errorResponse(res, 404, "TRIP_NOT_FOUND", "Không tìm thấy chuyến xe");
-  const seats = [];
-  for (let i = 1; i <= trip.total_seats; i++) {
-    seats.push(`A${i}`);
-  }
-  res.json({ data: { tripId: trip.id, price: trip.price, seats } });
+  const n = trip.total_seats;
+  const range = (prefix, count) => Array.from({ length: count }, (_, i) => prefix + (i + 1));
+  const decks = trip.bus_type === "Giường nằm"
+    ? [{ name: "Tầng dưới", seats: range("A", Math.ceil(n / 2)) }, { name: "Tầng trên", seats: range("B", Math.floor(n / 2)) }]
+    : [{ name: "Sàn xe", seats: range("A", n) }];
+  res.json({ data: { tripId: trip.id, price: trip.price, busType: trip.bus_type, seats: decks.flatMap((d) => d.seats), decks } });
 });
 
 // POST /trips (nội bộ - nhà xe tạo chuyến)
@@ -71,7 +72,16 @@ app.post("/trips", async (req, res) => {
   if (!origin || !destination || !departure_time || !price) {
     return errorResponse(res, 400, "INVALID_INPUT", "Thiếu dữ liệu bắt buộc");
   }
-  const trip = await Trip.create({ origin, destination, departure_time, bus_plate, bus_type, total_seats: total_seats || 40, price });
+  if (origin === destination) return errorResponse(res, 400, "INVALID_INPUT", "Điểm đi và điểm đến không được trùng nhau");
+  if (isNaN(new Date(departure_time)) || new Date(departure_time) <= new Date()) {
+    return errorResponse(res, 400, "INVALID_INPUT", "Giờ khởi hành phải ở tương lai");
+  }
+  if (!(Number(price) > 0)) return errorResponse(res, 400, "INVALID_INPUT", "Giá vé phải lớn hơn 0");
+  const seatsCount = Number(total_seats || 40);
+  if (!Number.isInteger(seatsCount) || seatsCount < 8 || seatsCount > 60 || seatsCount % 2 !== 0) {
+    return errorResponse(res, 400, "INVALID_INPUT", "Số ghế phải là số chẵn từ 8 đến 60");
+  }
+  const trip = await Trip.create({ origin, destination, departure_time, bus_plate, bus_type: bus_type || "Limousine", total_seats: seatsCount, price });
   res.status(201).json({ data: trip });
 });
 

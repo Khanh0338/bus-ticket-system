@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.env
+*.log
+.DS_Store
+Thumbs.db
+# file sinh ra khi chạy bộ test tích hợp
+tests/booking-integration/booking_under_test.js
+tests/booking-integration/node_modules/
+tests/booking-integration/package*.json
